@@ -1,0 +1,129 @@
+################################################################################
+# Demo App Deployment
+#
+# This is a sample application that demonstrates the full platform workflow:
+# - Deployed via ArgoCD (GitOps)
+# - Image pulled from ECR (private registry)
+# - Sidecar injected by Istio (mTLS)
+# - Metrics scraped by Prometheus (/metrics endpoint)
+# - Logs shipped by Fluent Bit (stdout → CloudWatch)
+# - Secrets injected by ESO (from Secrets Manager)
+# - Admission validated by Kyverno (labels, limits, non-privileged)
+#
+# This deployment is COMPLIANT with all our Kyverno policies:
+# ✓ Has app/team/environment labels (require-labels)
+# ✓ Has CPU/memory requests and limits (require-resource-limits)
+# ✓ Runs as non-root, no privilege escalation (disallow-privileged)
+# ✓ Image from ECR (restrict-registries)
+################################################################################
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rockauto-demo-app
+  namespace: rockauto-apps
+  labels:
+    app: demo-app
+    team: platform
+    environment: prod
+    version: "1.0.0"
+spec:
+  replicas: 2  # HA — survives one pod failure
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+        team: platform
+        environment: prod
+        version: "1.0.0"
+      annotations:
+        # Prometheus will scrape metrics from this pod
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      # Use a dedicated service account (not the default)
+      serviceAccountName: rockauto-demo-app
+
+      # Security context — pod-level settings
+      securityContext:
+        runAsNonRoot: true       # Container MUST run as non-root user
+        runAsUser: 1000          # Run as UID 1000
+        fsGroup: 1000            # Files owned by GID 1000
+
+      containers:
+        - name: demo-app
+          # Image from our private ECR registry
+          image: ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/rockauto/demo-app:latest
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          # Resource requests and limits (required by Kyverno policy)
+          resources:
+            requests:
+              cpu: 100m       # 0.1 CPU cores minimum
+              memory: 128Mi   # 128MB RAM minimum
+            limits:
+              cpu: 500m       # 0.5 CPU cores maximum
+              memory: 256Mi   # 256MB RAM maximum
+
+          # Container-level security (required by Kyverno policy)
+          securityContext:
+            allowPrivilegeEscalation: false  # Cannot gain more privileges
+            readOnlyRootFilesystem: true     # Cannot write to container filesystem
+            capabilities:
+              drop:
+                - ALL  # Drop all Linux capabilities (least privilege)
+
+          # Health checks — Kubernetes uses these to know if the app is alive
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+          # Environment variables (non-sensitive)
+          env:
+            - name: APP_NAME
+              value: "rockauto-demo-app"
+            - name: ENVIRONMENT
+              value: "prod"
+            - name: LOG_LEVEL
+              value: "info"
+            - name: LOG_FORMAT
+              value: "json"  # Structured logging for CloudWatch Insights
+
+          # Mount secrets from External Secrets Operator
+          envFrom:
+            - secretRef:
+                name: rockauto-app-secrets  # Created by ESO from Secrets Manager
+
+          # Writable temp directory (since rootFS is read-only)
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      # Spread pods across AZs for high availability
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: demo-app

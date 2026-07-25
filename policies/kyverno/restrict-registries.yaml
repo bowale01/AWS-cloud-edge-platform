@@ -1,0 +1,48 @@
+################################################################################
+# Kyverno Policy: Restrict Image Registries
+#
+# WHY: If pods can pull from any registry (Docker Hub, random registries),
+# attackers can deploy malicious images. By restricting to only our ECR
+# registry, we ensure every image was:
+# - Built by our CI pipeline
+# - Scanned for vulnerabilities
+# - Signed with Cosign
+#
+# WHAT IT DOES: Only allows images from our ECR registry
+# (*.dkr.ecr.us-east-1.amazonaws.com/rockauto/*). Blocks all other sources.
+#
+# SUPPLY CHAIN SECURITY:
+# Git Push → GitHub Actions builds image → Trivy scans → Cosign signs →
+# Push to ECR → Kyverno verifies registry + signature → Pod starts
+################################################################################
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: rockauto-restrict-registries
+  annotations:
+    policies.kyverno.io/title: Restrict Image Registries
+    policies.kyverno.io/category: Supply Chain Security
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: restrict-to-ecr
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - istio-system
+                - rockauto-monitoring
+      validate:
+        message: "Images must come from the approved ECR registry (*.dkr.ecr.us-east-1.amazonaws.com/rockauto/*)."
+        pattern:
+          spec:
+            containers:
+              - image: "*.dkr.ecr.us-east-1.amazonaws.com/rockauto/*"

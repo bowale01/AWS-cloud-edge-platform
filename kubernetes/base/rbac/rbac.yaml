@@ -1,0 +1,87 @@
+################################################################################
+# RBAC — Role-Based Access Control
+#
+# RBAC controls WHO can do WHAT in the cluster. Without RBAC:
+# - Any user/service account can create, delete, or modify any resource
+# - A compromised pod could delete all deployments
+# - No audit trail of who did what
+#
+# RBAC components:
+# - Role: defines WHAT actions are allowed (get, list, create, delete)
+# - RoleBinding: assigns a Role to a WHO (user, group, service account)
+# - ClusterRole: same as Role but cluster-wide (not namespace-scoped)
+# - ClusterRoleBinding: assigns a ClusterRole cluster-wide
+#
+# PRINCIPLE OF LEAST PRIVILEGE:
+# Every service account gets ONLY the permissions it needs.
+# Platform services get more access. Application pods get minimal access.
+################################################################################
+---
+# Platform Admin Role — for platform engineers managing the cluster
+# Can do everything in platform and monitoring namespaces
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rockauto-platform-admin
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+# App Developer Role — for application teams
+# Can view/deploy in their namespace but cannot modify cluster-level resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rockauto-app-developer
+  namespace: rockauto-apps
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources: ["pods", "deployments", "services", "configmaps", "jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods/log", "pods/exec"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]  # Can read secrets but not create/delete
+---
+# Read-Only Role — for monitoring systems and auditors
+# Can view all resources but cannot modify anything
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: rockauto-readonly
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+---
+# Bind the app developer role to the app-team group
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rockauto-app-developer-binding
+  namespace: rockauto-apps
+subjects:
+  - kind: Group
+    name: app-developers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: rockauto-app-developer
+  apiGroup: rbac.authorization.k8s.io
+---
+# Bind readonly to the monitoring service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: rockauto-monitoring-readonly
+subjects:
+  - kind: ServiceAccount
+    name: prometheus-server
+    namespace: rockauto-monitoring
+roleRef:
+  kind: ClusterRole
+  name: rockauto-readonly
+  apiGroup: rbac.authorization.k8s.io

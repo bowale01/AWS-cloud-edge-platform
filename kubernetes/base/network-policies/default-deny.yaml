@@ -1,0 +1,102 @@
+################################################################################
+# Default Deny Network Policies
+#
+# ZERO-TRUST NETWORKING: Block ALL traffic by default, then explicitly allow
+# only what's needed. This is the opposite of the Kubernetes default
+# (which allows all pod-to-pod communication).
+#
+# Without these policies:
+# - Any pod can talk to any other pod in any namespace
+# - A compromised pod can scan the entire cluster network
+# - Lateral movement is trivial for attackers
+#
+# With these policies:
+# - All ingress is blocked unless explicitly allowed
+# - All egress is blocked unless explicitly allowed
+# - Each service must declare what it needs to communicate with
+# - Blast radius of a compromise is limited to one namespace
+#
+# These are applied per-namespace. Services that need to communicate
+# get explicit "allow" policies (defined separately).
+################################################################################
+---
+# Block all ingress traffic in the apps namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: rockauto-apps
+spec:
+  podSelector: {}  # Applies to ALL pods in this namespace
+  policyTypes:
+    - Ingress
+---
+# Block all egress traffic in the apps namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-egress
+  namespace: rockauto-apps
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+---
+# Allow DNS resolution (required for any pod to function)
+# Without this, pods can't resolve service names to IPs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: rockauto-apps
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Allow pods to receive traffic from Istio ingress gateway
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-istio-ingress
+  namespace: rockauto-apps
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: istio-system
+---
+# Allow Prometheus to scrape metrics from all pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: rockauto-apps
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: rockauto-monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+        - protocol: TCP
+          port: 15090  # Istio sidecar metrics

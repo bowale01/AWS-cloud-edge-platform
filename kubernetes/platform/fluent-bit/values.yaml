@@ -1,0 +1,86 @@
+################################################################################
+# Fluent Bit — Log Shipper
+#
+# WHAT IT DOES:
+# Runs as a DaemonSet (one pod per node). Collects container logs from
+# /var/log/containers/* and ships them to CloudWatch Logs.
+#
+# WHY FLUENT BIT?
+# - Lightweight (~15MB RAM per pod vs ~100MB for Fluentd)
+# - Kubernetes-native metadata enrichment (adds pod name, namespace, labels)
+# - Supports multiple outputs (CloudWatch, S3, Elasticsearch)
+# - Runs on every node via DaemonSet — never misses a log
+#
+# LOG FLOW:
+# Pod writes to stdout → kubelet writes to /var/log/containers/ →
+# Fluent Bit tail input reads it → adds K8s metadata →
+# ships to CloudWatch Log Group
+#
+# STRUCTURED LOGGING:
+# Applications should log in JSON format:
+# {"timestamp":"2024-01-01T12:00:00Z","level":"error","message":"DB timeout"}
+# This allows filtering/querying in CloudWatch Insights.
+################################################################################
+
+## DaemonSet configuration
+kind: DaemonSet
+
+## Resource limits (Fluent Bit is very lightweight)
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 128Mi
+
+## Service account with IRSA annotation for CloudWatch access
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/rockauto-fluent-bit-role-prod"
+
+## Fluent Bit configuration
+config:
+  ## INPUT: Read container logs from the node filesystem
+  inputs: |
+    [INPUT]
+        Name              tail
+        Tag               kube.*
+        Path              /var/log/containers/*.log
+        Parser            cri
+        DB                /var/log/flb_kube.db
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+        Refresh_Interval  10
+
+  ## FILTER: Enrich logs with Kubernetes metadata (pod name, namespace, labels)
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        Kube_URL            https://kubernetes.default.svc:443
+        Kube_CA_File        /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        Kube_Token_File     /var/run/secrets/kubernetes.io/serviceaccount/token
+        Merge_Log           On
+        Merge_Log_Key       log_processed
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude Off
+
+  ## OUTPUT: Ship to CloudWatch Logs (separate log groups per type)
+  outputs: |
+    [OUTPUT]
+        Name                cloudwatch_logs
+        Match               kube.*rockauto-apps*
+        region              us-east-1
+        log_group_name      /aws/eks/rockauto-eks-prod/application
+        log_stream_prefix   app-
+        auto_create_group   false
+
+    [OUTPUT]
+        Name                cloudwatch_logs
+        Match               kube.*rockauto-platform*
+        region              us-east-1
+        log_group_name      /aws/eks/rockauto-eks-prod/platform
+        log_stream_prefix   platform-
+        auto_create_group   false

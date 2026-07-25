@@ -1,0 +1,49 @@
+################################################################################
+# Namespaces — Logical Isolation for Workloads
+#
+# Namespaces divide the cluster into isolated areas. Each team/service
+# gets its own namespace with separate RBAC, network policies, and quotas.
+# Think of them like folders that keep workloads separated.
+#
+# Why not just use "default" namespace?
+# - No isolation (any pod can talk to any other pod)
+# - No resource quotas (one app can consume all cluster resources)
+# - No RBAC scoping (everyone can see everything)
+# - Messy in production (hundreds of resources with no organization)
+################################################################################
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rockauto-platform
+  labels:
+    name: rockauto-platform
+    purpose: platform-services
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rockauto-apps
+  labels:
+    name: rockauto-apps
+    purpose: application-workloads
+    istio-injection: enabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rockauto-monitoring
+  labels:
+    name: rockauto-monitoring
+    purpose: observability
+    istio-injection: disabled
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rockauto-security
+  labels:
+    name: rockauto-security
+    purpose: security-services
+    istio-injection: disabled

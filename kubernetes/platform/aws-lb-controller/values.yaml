@@ -1,0 +1,50 @@
+################################################################################
+# AWS Load Balancer Controller — Kubernetes Ingress → AWS ALB
+#
+# WHAT IT DOES:
+# Watches for Kubernetes Ingress resources and automatically creates/manages
+# AWS Application Load Balancers (ALBs). No need to manually create ALBs.
+#
+# WHY NOT CREATE ALB IN TERRAFORM?
+# You could, but then you'd need to manually update target groups every
+# time pods scale up/down. The LB Controller handles this dynamically:
+# - Ingress created → ALB provisioned automatically
+# - Pods scale → target group updated in real-time
+# - Ingress deleted → ALB cleaned up
+#
+# HOW IT WORKS:
+# 1. You create a Kubernetes Ingress with ALB annotations
+# 2. Controller detects it and creates an ALB in the tagged public subnets
+# 3. Controller registers pod IPs as ALB targets
+# 4. ALB routes HTTPS traffic to pods via Istio ingress gateway
+# 5. Health checks keep target group in sync with running pods
+#
+# SUBNET DISCOVERY:
+# The controller finds subnets using the tags we applied in the VPC module:
+# - "kubernetes.io/role/elb" = "1" → public subnets (internet-facing ALB)
+# - "kubernetes.io/role/internal-elb" = "1" → private subnets (internal ALB)
+################################################################################
+
+## Cluster name (must match EKS cluster)
+clusterName: rockauto-eks-prod
+
+## Service account with IRSA for ALB management
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/rockauto-aws-lb-controller-role-prod"
+
+## Region
+region: us-east-1
+
+## VPC ID (controller needs this to create ALBs in the right VPC)
+vpcId: "VPC_ID_PLACEHOLDER"
+
+## Resources
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi

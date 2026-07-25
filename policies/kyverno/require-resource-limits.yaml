@@ -1,0 +1,52 @@
+################################################################################
+# Kyverno Policy: Require Resource Limits
+#
+# WHY: Without resource limits, a single pod can consume ALL CPU and memory
+# on a node, starving other pods (noisy neighbor problem). In production,
+# this causes outages when one misbehaving app kills everything else.
+#
+# WHAT IT DOES: Blocks any pod that doesn't set CPU and memory requests
+# AND limits. Requests = minimum guaranteed. Limits = maximum allowed.
+#
+# RESOURCE CONCEPTS:
+# - requests: "I need at least this much" (used for scheduling)
+# - limits: "I can never use more than this" (enforced by kernel/cgroups)
+# - Without requests: scheduler doesn't know where to place the pod
+# - Without limits: pod can OOM-kill other pods on the same node
+################################################################################
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: rockauto-require-resource-limits
+  annotations:
+    policies.kyverno.io/title: Require Resource Limits
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: require-cpu-and-memory-limits
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - istio-system
+      validate:
+        message: "CPU and memory requests/limits are required. Add resources.requests and resources.limits to all containers."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  requests:
+                    memory: "?*"
+                    cpu: "?*"
+                  limits:
+                    memory: "?*"
+                    cpu: "?*"

@@ -1,0 +1,31 @@
+################################################################################
+# Service — Exposes the Demo App Within the Cluster
+#
+# A Service gives pods a stable network identity. Without a Service:
+# - Pods get random IPs that change on restart
+# - Other pods can't reliably find this app
+# - Load balancing between replicas doesn't happen
+#
+# With a Service:
+# - Stable DNS name: rockauto-demo-app.rockauto-apps.svc.cluster.local
+# - Load balances across all 2 replicas
+# - Istio uses this for mTLS routing and telemetry
+################################################################################
+apiVersion: v1
+kind: Service
+metadata:
+  name: rockauto-demo-app
+  namespace: rockauto-apps
+  labels:
+    app: demo-app
+    team: platform
+    environment: prod
+spec:
+  type: ClusterIP  # Internal only — external access via ALB/Istio
+  ports:
+    - name: http
+      port: 80          # Service listens on port 80
+      targetPort: 8080  # Forwards to container port 8080
+      protocol: TCP
+  selector:
+    app: demo-app  # Routes traffic to pods with this label

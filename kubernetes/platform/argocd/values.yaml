@@ -1,0 +1,77 @@
+################################################################################
+# ArgoCD — GitOps Continuous Delivery
+#
+# WHAT IT DOES:
+# ArgoCD watches your Git repository and automatically syncs the cluster
+# state to match what's in Git. If someone manually changes something in
+# the cluster, ArgoCD detects the drift and reverts it.
+#
+# WHY GITOPS?
+# - Git is the single source of truth (not someone's kubectl commands)
+# - Every change is auditable (Git commit history)
+# - Rollback = git revert (not "who remembers what was running before?")
+# - Self-healing: if someone deletes a deployment, ArgoCD recreates it
+#
+# HOW IT WORKS:
+# 1. Developer pushes manifests to Git
+# 2. ArgoCD detects the change (polls every 3 minutes or webhook)
+# 3. ArgoCD compares Git state vs cluster state
+# 4. If different, ArgoCD syncs (applies the manifests)
+# 5. Dashboard shows sync status for every app
+#
+# PULL-BASED MODEL (important for edge):
+# ArgoCD PULLS from Git — it doesn't need inbound access from CI.
+# This means edge clusters behind firewalls can still be managed.
+# The edge ArgoCD agent reaches OUT to GitHub (outbound only).
+################################################################################
+
+## ArgoCD Server
+server:
+  # Use insecure mode behind ALB (ALB handles TLS termination)
+  extraArgs:
+    - --insecure
+
+  # Resource limits (ArgoCD is lightweight)
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Service type for ALB ingress
+  service:
+    type: ClusterIP
+
+## ArgoCD Repo Server (pulls manifests from Git)
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## ArgoCD Application Controller (syncs cluster state)
+controller:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+## ArgoCD Configs
+configs:
+  params:
+    # Sync every 3 minutes (or use webhook for instant sync)
+    timeout.reconciliation: 180s
+
+  repositories:
+    rockauto-platform:
+      url: https://github.com/bowale01/AWS-cloud-edge-platform.git
+      name: rockauto-platform
+      type: git

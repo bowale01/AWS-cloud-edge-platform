@@ -1,0 +1,68 @@
+################################################################################
+# Istio — Service Mesh
+#
+# WHAT IT DOES:
+# Istio injects a sidecar proxy (Envoy) into every pod. This proxy handles:
+# - mTLS: Encrypts ALL traffic between pods automatically
+# - Traffic management: Canary deploys, retries, circuit breaking
+# - Observability: Distributed tracing, L7 metrics per service
+#
+# WHY A SERVICE MESH?
+# Without Istio, pod-to-pod traffic is unencrypted plaintext.
+# Anyone who compromises one pod can sniff traffic from others.
+# mTLS ensures every connection is encrypted + authenticated.
+#
+# HOW mTLS WORKS:
+# 1. Istio CA issues a certificate to each pod's sidecar
+# 2. When Pod A talks to Pod B, sidecars do TLS handshake
+# 3. Both sides verify certificates (mutual authentication)
+# 4. Traffic is encrypted in transit — even within the same node
+# 5. Certificates auto-rotate every 24 hours
+#
+# ZERO-TRUST: Even if an attacker is inside the cluster network,
+# they can't read traffic or impersonate services without a valid cert.
+################################################################################
+
+## Istio Base (CRDs and cluster-wide resources)
+base:
+  enabled: true
+
+## Istiod (control plane — manages certificates, config, discovery)
+istiod:
+  enabled: true
+
+  pilot:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # Auto-inject sidecar into labeled namespaces
+    enableProtocolSniffing: true
+
+## Istio Ingress Gateway (receives external traffic from ALB)
+ingressGateways:
+  - name: istio-ingressgateway
+    enabled: true
+    serviceAnnotations:
+      service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+      service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+
+## Mesh-wide settings
+meshConfig:
+  # STRICT mTLS — all traffic MUST be encrypted, no exceptions
+  defaultConfig:
+    holdApplicationUntilProxyStarts: true
+
+  # Enable access logging (who called what)
+  accessLogFile: /dev/stdout
+  accessLogEncoding: JSON
+
+  # Enable distributed tracing (see request flow across services)
+  enableTracing: true
+  defaultConfig:
+    tracing:
+      sampling: 100.0  # 100% sampling for demo (reduce in production)

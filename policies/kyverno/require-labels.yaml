@@ -1,0 +1,51 @@
+################################################################################
+# Kyverno Policy: Require Labels
+#
+# WHY: Labels are metadata that identify resources. Without them:
+# - You can't filter pods by team/app in `kubectl get pods -l app=xxx`
+# - Monitoring can't group metrics by service
+# - Network policies can't target specific workloads
+# - Cost allocation can't attribute spend to teams
+#
+# WHAT IT DOES: Blocks any Deployment that doesn't have:
+# - app: name of the application
+# - team: team that owns it
+# - environment: prod/staging
+#
+# Labels are the foundation of Kubernetes operations — everything
+# (services, network policies, HPA, PDB) uses label selectors.
+################################################################################
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: rockauto-require-labels
+  annotations:
+    policies.kyverno.io/title: Require Standard Labels
+    policies.kyverno.io/category: Best Practices
+    policies.kyverno.io/severity: medium
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: require-app-label
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - istio-system
+      validate:
+        message: "Labels 'app', 'team', and 'environment' are required on all Deployments/StatefulSets/DaemonSets."
+        pattern:
+          metadata:
+            labels:
+              app: "?*"
+              team: "?*"
+              environment: "?*"

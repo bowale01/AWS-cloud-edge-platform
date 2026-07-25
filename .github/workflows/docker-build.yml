@@ -1,0 +1,87 @@
+################################################################################
+# Docker Build — Container Build, Scan, Sign, and Push
+#
+# This workflow handles the container image lifecycle:
+# 1. Build the Docker image
+# 2. Scan for vulnerabilities with Trivy (blocks HIGH/CRITICAL)
+# 3. Sign the image with Cosign (proves it came from our pipeline)
+# 4. Push to ECR (our private registry)
+#
+# SUPPLY CHAIN SECURITY:
+# - Trivy: Scans OS packages and app dependencies for known CVEs
+# - Cosign: Cryptographically signs the image digest
+# - Kyverno (in-cluster): Verifies the signature before allowing deployment
+# - ECR IMMUTABLE tags: Once pushed, a tag can never be overwritten
+#
+# This ensures that what runs in production was:
+# ✓ Built by our pipeline (not someone's laptop)
+# ✓ Scanned for vulnerabilities (no known exploits)
+# ✓ Signed (tamper-proof)
+# ✓ From our registry (not Docker Hub or random source)
+################################################################################
+
+name: Docker Build & Push
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'kubernetes/apps/**'
+      - 'Dockerfile*'
+
+env:
+  AWS_REGION: "us-east-1"
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com
+  IMAGE_NAME: rockauto/demo-app
+
+permissions:
+  contents: read
+  id-token: write  # Required for Cosign keyless signing
+
+jobs:
+  build-scan-push:
+    name: Build, Scan & Push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+          docker tag ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+                     ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
+          format: "table"
+          exit-code: "1"              # Fail the build if vulnerabilities found
+          severity: "HIGH,CRITICAL"   # Only fail on HIGH and CRITICAL
+          ignore-unfixed: true        # Skip CVEs with no fix available yet
+
+      - name: Push to ECR
+        run: |
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          docker push ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image with Cosign (keyless)
+        run: |
+          cosign sign --yes ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}

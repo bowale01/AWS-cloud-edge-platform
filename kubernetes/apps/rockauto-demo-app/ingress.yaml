@@ -1,0 +1,64 @@
+################################################################################
+# Ingress — External Access via ALB
+#
+# WHAT IT DOES:
+# Creates an AWS Application Load Balancer that routes external HTTPS
+# traffic to the demo-app Service inside the cluster.
+#
+# FLOW:
+# User → ALB (HTTPS/443) → Istio Ingress Gateway → Istio Sidecar (mTLS)
+#      → demo-app Pod → Response back through same path
+#
+# HOW IT WORKS WITH AWS LB CONTROLLER:
+# 1. This Ingress resource is created
+# 2. AWS LB Controller detects it (watches for kubernetes.io/ingress.class: alb)
+# 3. Controller creates an ALB in the public subnets (tagged with elb role)
+# 4. Controller creates target groups pointing to pod IPs
+# 5. ALB health-checks pods directly (IP mode, not NodePort)
+# 6. As pods scale, target group updates automatically
+#
+# ANNOTATIONS:
+# These tell the AWS LB Controller exactly how to configure the ALB
+################################################################################
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rockauto-demo-app
+  namespace: rockauto-apps
+  labels:
+    app: demo-app
+    team: platform
+    environment: prod
+  annotations:
+    # Use ingressClassName (below) instead of the deprecated annotation.
+    # AWS LB Controller watches for ingressClassName: alb
+
+    # Internet-facing (receives traffic from the internet)
+    alb.ingress.kubernetes.io/scheme: internet-facing
+
+    # Use IP mode (routes directly to pod IPs, not NodePort)
+    alb.ingress.kubernetes.io/target-type: ip
+
+    # HTTPS listener on port 443
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
+
+    # Health check configuration
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: "30"
+
+    # Tags applied to the ALB in AWS (for cost tracking)
+    alb.ingress.kubernetes.io/tags: "Project=rockauto,Environment=prod"
+spec:
+  # ingressClassName replaces the deprecated kubernetes.io/ingress.class annotation
+  # This is the modern (GA since K8s 1.18) way to select which controller handles this Ingress
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: rockauto-demo-app
+                port:
+                  number: 80

@@ -1,0 +1,153 @@
+################################################################################
+# .gitignore — Prevent Sensitive and Unnecessary Files from Being Committed
+#
+# RULE: If it's a secret, generated, or local-only file, it goes here.
+# If it accidentally gets committed, anyone with repo access can see it —
+# even if you delete it later (Git history keeps everything forever).
+################################################################################
+
+#===============================================================================
+# Terraform
+#===============================================================================
+
+# State files — contain ALL resource details including secrets (passwords, ARNs)
+# NEVER commit state files. They belong in S3 (remote backend).
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Plan files — may contain sensitive values from state
+*.tfplan
+tfplan
+
+# Terraform working directory (downloaded providers, modules)
+.terraform/
+.terraform.lock.hcl
+
+# Terraform variable files with secrets (if you use .tfvars for passwords)
+*.auto.tfvars
+terraform.tfvars
+*.tfvars
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Override files (local developer overrides)
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+#===============================================================================
+# AWS & Credentials
+#===============================================================================
+
+# AWS credentials and config (safety net — should never exist in this repo)
+.aws/
+credentials
+*.pem
+*.key
+*.pub
+
+# AWS SAM
+.aws-sam/
+
+#===============================================================================
+# Kubernetes
+#===============================================================================
+
+# Kubeconfig files (contain cluster auth tokens)
+kubeconfig
+*.kubeconfig
+.kube/
+
+# Helm
+.helmignore
+charts/
+
+#===============================================================================
+# Secrets & Environment Files
+#===============================================================================
+
+# Environment variable files (often contain passwords, API keys)
+.env
+.env.*
+.env.local
+.env.production
+*.env
+
+# Secret value files
+secrets.yaml
+secrets.yml
+*-secrets.yaml
+*-secrets.yml
+
+#===============================================================================
+# Node.js
+#===============================================================================
+
+# Dependencies (reinstall with npm ci)
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Package lock (optional — some teams commit this, some don't)
+# package-lock.json
+
+#===============================================================================
+# IDE & OS
+#===============================================================================
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# IntelliJ
+.idea/
+*.iml
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.nfs*
+
+#===============================================================================
+# Logs & Temp Files
+#===============================================================================
+
+*.log
+tmp/
+temp/
+.cache/
+
+#===============================================================================
+# Docker
+#===============================================================================
+
+# Docker build cache
+.docker/
+
+#===============================================================================
+# Coverage & Test Output
+#===============================================================================
+
+coverage/
+*.lcov
+.nyc_output/

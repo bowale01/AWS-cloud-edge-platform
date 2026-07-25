@@ -1,0 +1,53 @@
+################################################################################
+# ArgoCD Application — GitOps Deployment Definition
+#
+# WHAT IT DOES:
+# Tells ArgoCD to watch this Git path and sync it to the cluster.
+# Any change pushed to this path in Git → ArgoCD auto-deploys it.
+#
+# HOW GITOPS WORKS WITH THIS APP:
+# 1. Developer modifies kubernetes/apps/rockauto-demo-app/ in Git
+# 2. ArgoCD detects the change (polls every 3 minutes)
+# 3. ArgoCD compares Git state vs cluster state
+# 4. ArgoCD applies the diff (creates/updates/deletes resources)
+# 5. Dashboard shows sync status (Synced ✓ or OutOfSync ✗)
+#
+# SELF-HEALING:
+# If someone runs `kubectl delete deployment rockauto-demo-app` manually,
+# ArgoCD will detect the drift and recreate it within 3 minutes.
+# The cluster state ALWAYS converges to what's in Git.
+#
+# ROLLBACK:
+# git revert <commit> → push → ArgoCD syncs → app reverted. That's it.
+################################################################################
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: rockauto-demo-app
+  namespace: argocd
+  labels:
+    app: demo-app
+    team: platform
+    environment: prod
+spec:
+  project: default
+
+  # Source: where to pull manifests FROM
+  source:
+    repoURL: https://github.com/bowale01/AWS-cloud-edge-platform.git
+    targetRevision: main
+    path: kubernetes/apps/rockauto-demo-app  # This directory
+
+  # Destination: where to deploy TO
+  destination:
+    server: https://kubernetes.default.svc  # This cluster
+    namespace: rockauto-apps
+
+  # Sync policy: automatically sync + self-heal
+  syncPolicy:
+    automated:
+      prune: true       # Delete resources removed from Git
+      selfHeal: true    # Fix manual changes (drift correction)
+    syncOptions:
+      - CreateNamespace=false  # Namespace already exists
+      - ApplyOutOfSyncOnly=true  # Only apply what changed (faster)

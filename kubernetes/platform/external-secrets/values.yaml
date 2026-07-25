@@ -1,0 +1,52 @@
+################################################################################
+# External Secrets Operator (ESO) — Secrets Synchronization
+#
+# WHAT IT DOES:
+# Syncs secrets from AWS Secrets Manager into Kubernetes Secrets.
+# Pods read native K8s Secrets — they don't know about AWS.
+#
+# WHY NOT JUST USE K8S SECRETS DIRECTLY?
+# - K8s Secrets in manifests end up in Git (even base64 is NOT encryption)
+# - Anyone with cluster access can read all secrets
+# - No rotation mechanism (you'd have to redeploy)
+# - No audit trail of who accessed what
+#
+# ESO SOLVES THIS:
+# - Secrets stored in Secrets Manager (encrypted with KMS, audit via CloudTrail)
+# - ESO fetches them at runtime using IRSA (short-lived credentials)
+# - Creates native K8s Secrets that pods mount normally
+# - Auto-refreshes when the source secret changes (rotation!)
+# - Secret values NEVER appear in Git, manifests, or Terraform state
+#
+# FLOW:
+# AWS Secrets Manager (source) → ESO controller (fetches via IRSA) →
+# Kubernetes Secret (created in namespace) → Pod mounts as env/volume
+################################################################################
+
+## Install CRDs (Custom Resource Definitions)
+installCRDs: true
+
+## Service account with IRSA for Secrets Manager access
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/rockauto-external-secrets-role-prod"
+
+## Controller resources
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+## Webhook (validates ExternalSecret resources before creation)
+webhook:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi

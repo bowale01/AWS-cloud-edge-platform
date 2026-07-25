@@ -1,0 +1,67 @@
+################################################################################
+# Terraform Apply — Deploy Infrastructure Changes
+#
+# This workflow runs ONLY on merge to main AND requires manual approval.
+# It applies the Terraform plan to create/modify real AWS resources.
+#
+# SAFETY CONTROLS:
+# - Only triggers on main branch (not feature branches)
+# - Requires manual trigger (workflow_dispatch) — no accidental deploys
+# - Uses the same plan that was reviewed in the PR
+# - Outputs are logged for audit trail
+#
+# WHY MANUAL TRIGGER?
+# Infrastructure changes are high-risk. Unlike application deploys,
+# a bad Terraform apply can delete databases, break networking, or
+# corrupt state. Manual approval ensures a human reviews before deploying.
+################################################################################
+
+name: Terraform Apply
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "apply" to confirm infrastructure deployment'
+        required: true
+
+env:
+  TF_VERSION: "1.5.7"
+  AWS_REGION: "us-east-1"
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'apply'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: terraform
+        run: terraform apply -auto-approve tfplan

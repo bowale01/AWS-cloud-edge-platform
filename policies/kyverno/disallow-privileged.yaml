@@ -1,0 +1,63 @@
+################################################################################
+# Kyverno Policy: Disallow Privileged Containers
+#
+# WHY: A privileged container has full access to the host node — it can
+# read/write any file, access all devices, and escape the container.
+# This is the #1 container security risk.
+#
+# WHAT IT DOES: Blocks any pod that sets privileged: true or allows
+# privilege escalation. Applies to all namespaces except kube-system.
+#
+# ENFORCEMENT: "enforce" = block the pod from being created.
+# (vs "audit" which just logs a warning but allows it)
+################################################################################
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: rockauto-disallow-privileged
+  annotations:
+    policies.kyverno.io/title: Disallow Privileged Containers
+    policies.kyverno.io/category: Pod Security
+    policies.kyverno.io/severity: high
+spec:
+  validationFailureAction: enforce
+  background: true
+  rules:
+    - name: deny-privileged
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - istio-system
+      validate:
+        message: "Privileged containers are not allowed. Remove 'privileged: true' from your security context."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  privileged: "false|!true"
+    - name: deny-privilege-escalation
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      exclude:
+        any:
+          - resources:
+              namespaces:
+                - kube-system
+                - istio-system
+      validate:
+        message: "Privilege escalation is not allowed. Set 'allowPrivilegeEscalation: false'."
+        pattern:
+          spec:
+            containers:
+              - securityContext:
+                  allowPrivilegeEscalation: false

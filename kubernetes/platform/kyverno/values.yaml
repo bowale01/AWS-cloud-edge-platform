@@ -1,0 +1,55 @@
+################################################################################
+# Kyverno — Kubernetes Policy Engine
+#
+# WHAT IT DOES:
+# Acts as an admission controller — intercepts every request to the K8s API
+# and checks it against policies BEFORE the resource is created.
+#
+# ALREADY COVERED in policies/kyverno/ — this file just configures the
+# Kyverno controller itself (how it runs, not what policies it enforces).
+#
+# ADMISSION CONTROL FLOW:
+# kubectl apply → API Server → Kyverno webhook → Policy check →
+# ✓ Pass → Resource created
+# ✗ Fail → Request rejected with error message
+#
+# WHY KYVERNO OVER OPA/GATEKEEPER?
+# - Kyverno policies are written in YAML (not Rego language)
+# - Easier for teams to write and understand policies
+# - Can generate and mutate resources (not just validate)
+# - Native Kubernetes CRDs (ClusterPolicy, Policy)
+################################################################################
+
+## Admission controller settings
+admissionController:
+  replicas: 2  # HA — if one replica dies, policies still enforced
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+## Background controller (scans existing resources for violations)
+backgroundController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+## Reports controller (generates policy reports)
+reportsController:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi

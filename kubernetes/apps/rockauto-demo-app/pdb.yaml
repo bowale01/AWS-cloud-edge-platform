@@ -1,0 +1,32 @@
+################################################################################
+# Pod Disruption Budget (PDB)
+#
+# WHAT IT DOES:
+# Tells Kubernetes "you must always keep at least 1 pod running."
+# This prevents voluntary disruptions (node upgrades, scaling down,
+# kubectl drain) from taking ALL pods offline at once.
+#
+# WHY IT MATTERS:
+# During a node upgrade, Kubernetes drains nodes (evicts all pods).
+# Without a PDB, it could evict both replicas simultaneously → downtime.
+# With a PDB, it evicts one at a time, waiting for it to reschedule
+# before evicting the next.
+#
+# VOLUNTARY vs INVOLUNTARY:
+# - Voluntary: node drain, cluster autoscaler, upgrades (PDB respected)
+# - Involuntary: node crash, OOM kill, hardware failure (PDB NOT respected)
+################################################################################
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rockauto-demo-app
+  namespace: rockauto-apps
+  labels:
+    app: demo-app
+    team: platform
+    environment: prod
+spec:
+  minAvailable: 1  # At least 1 pod must always be running
+  selector:
+    matchLabels:
+      app: demo-app

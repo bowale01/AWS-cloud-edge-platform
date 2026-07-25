@@ -1,0 +1,100 @@
+################################################################################
+# Prometheus + Grafana — Metrics & Dashboards
+#
+# WHAT IT DOES:
+# - Prometheus: Scrapes /metrics endpoints from every pod every 30 seconds
+# - Grafana: Visualizes metrics in dashboards (CPU, memory, request rate)
+# - Alertmanager: Fires alerts when things go wrong (high error rate, pod crash)
+#
+# WHY PROMETHEUS?
+# It's the industry standard for Kubernetes monitoring. Every K8s component
+# and most apps expose /metrics in Prometheus format. One tool scrapes them all.
+#
+# RED METHOD (what to monitor):
+# - Rate: How many requests per second?
+# - Errors: What percentage are failing?
+# - Duration: How long do requests take?
+# If all three are healthy, the service is healthy.
+#
+# USE METHOD (for infrastructure):
+# - Utilization: How busy is the CPU/memory/disk?
+# - Saturation: Is anything queuing?
+# - Errors: Are there hardware/system errors?
+################################################################################
+
+## Prometheus Server
+prometheus:
+  prometheusSpec:
+    # How long to keep metrics (affects disk usage)
+    retention: 7d
+    retentionSize: "5GB"
+
+    # Scrape interval — how often Prometheus collects metrics
+    scrapeInterval: 30s
+
+    # Resource limits
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+
+    # Persistent storage for metrics (survives pod restart)
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+
+## Grafana (Dashboards)
+grafana:
+  enabled: true
+
+  # Admin password (change via Secrets Manager in production)
+  adminPassword: "rockauto-admin"
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+  # Pre-load dashboards for Kubernetes monitoring
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: default
+          folder: ""
+          type: file
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  # Default datasource points to our Prometheus
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-server:9090
+          isDefault: true
+
+## Alertmanager (sends notifications when alerts fire)
+alertmanager:
+  enabled: true
+
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi

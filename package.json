@@ -1,0 +1,11 @@
+{
+  "name": "rockauto-demo-app",
+  "version": "1.0.0",
+  "description": "RockAuto Cloud & Edge Platform — Demo Application",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "author": "",
+  "license": "ISC"
+}

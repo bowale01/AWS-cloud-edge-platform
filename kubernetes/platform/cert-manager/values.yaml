@@ -1,0 +1,60 @@
+################################################################################
+# Cert-Manager — Automated TLS Certificates
+#
+# WHAT IT DOES:
+# Automatically provisions, renews, and manages TLS certificates for
+# HTTPS ingress. No manual certificate creation or renewal needed.
+#
+# WHY CERT-MANAGER?
+# Without it, you'd need to:
+# - Manually create certificates (error-prone)
+# - Remember to renew before expiry (outages when you forget)
+# - Distribute certs to load balancers manually
+#
+# With Cert-Manager:
+# - Certificates issued automatically when Ingress is created
+# - Auto-renewal 30 days before expiry
+# - Supports Let's Encrypt (free) and private CAs
+# - Stores certs as Kubernetes Secrets (mounted by ingress controller)
+#
+# HOW IT WORKS:
+# 1. You create an Ingress with TLS annotation
+# 2. Cert-Manager detects it and creates a Certificate resource
+# 3. Cert-Manager requests a cert from Let's Encrypt (or private CA)
+# 4. Challenge is solved (DNS or HTTP)
+# 5. Cert is stored as K8s Secret
+# 6. ALB/Ingress uses the Secret for HTTPS
+# 7. Auto-renews 30 days before expiry
+################################################################################
+
+## Install CRDs
+installCRDs: true
+
+## Resources
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+## Webhook (validates Certificate resources)
+webhook:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+## CA Injector (injects CA bundle into webhooks)
+cainjector:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
