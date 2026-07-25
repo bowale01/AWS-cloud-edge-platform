@@ -40,7 +40,7 @@ The EKS control plane is managed by AWS. This is a non-disruptive operation — 
 # terraform/modules/eks/main.tf
 resource "aws_eks_cluster" "rockauto" {
   name    = "rockauto-eks-prod"
-  version = "1.29"  # Change from current to target version
+  version = "1.36"  # Change from current to target version
   # ... rest of config
 }
 ```
@@ -95,7 +95,7 @@ resource "aws_eks_addon" "vpc_cni" {
 resource "aws_eks_addon" "kube_proxy" {
   cluster_name  = aws_eks_cluster.rockauto.name
   addon_name    = "kube-proxy"
-  addon_version = "v1.29.0-eksbuild.1"  # Match K8s version
+  addon_version = "v1.36.0-eksbuild.1"  # Match K8s version
 }
 
 resource "aws_eks_addon" "coredns" {
@@ -107,7 +107,7 @@ resource "aws_eks_addon" "coredns" {
 
 ```bash
 # Check available addon versions
-aws eks describe-addon-versions --kubernetes-version 1.29 --addon-name vpc-cni
+aws eks describe-addon-versions --kubernetes-version 1.36 --addon-name vpc-cni
 
 # Apply addon upgrades
 terraform apply -target=module.eks.aws_eks_addon.vpc_cni
@@ -141,7 +141,7 @@ Node groups must run the same or one minor version below the control plane.
 resource "aws_eks_node_group" "rockauto_workers" {
   cluster_name    = aws_eks_cluster.rockauto.name
   node_group_name = "rockauto-workers-prod"
-  version         = "1.29"  # Update to match control plane
+  version         = "1.36"  # Update to match control plane
 
   update_config {
     max_unavailable = 1  # Roll one node at a time
@@ -322,8 +322,8 @@ Subject: [RockAuto] EKS Cluster Upgrade - <cluster-name> - <date>
 Status: IN PROGRESS / COMPLETE / ROLLED BACK
 
 Cluster: rockauto-eks-prod
-From Version: 1.28
-To Version: 1.29
+From Version: 1.35
+To Version: 1.36
 
 Timeline:
 - Start: <time>

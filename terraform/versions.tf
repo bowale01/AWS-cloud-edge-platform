@@ -4,7 +4,7 @@
 # This file locks down the exact versions of Terraform and providers used.
 # - Terraform >= 1.5.0: Ensures features like `import` blocks and `check`
 #   blocks are available for production workflows.
-# - AWS provider ~> 5.0: Latest major version with EKS 1.29 support,
+# - AWS provider ~> 5.0: Latest major version with EKS 1.36 support,
 #   default_tags, and full feature coverage for our architecture.
 # - Kubernetes provider ~> 2.25: Used to create namespaces, RBAC, network
 #   policies, and config maps directly from Terraform.

@@ -69,7 +69,7 @@ variable "availability_zones" {
 variable "cluster_version" {
   description = "Kubernetes version for EKS. Pin to a specific minor version to control upgrades."
   type        = string
-  default     = "1.29"
+  default     = "1.36"
 }
 
 variable "node_instance_types" {

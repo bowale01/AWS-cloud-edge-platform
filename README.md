@@ -26,7 +26,7 @@ A production-grade cloud-native infrastructure platform supporting distributed e
 
 | Technology | Function in This Project |
 |-----------|--------------------------|
-| **Kubernetes (EKS 1.29)** | Container orchestration platform for all cloud workloads |
+| **Kubernetes (EKS 1.36)** | Container orchestration platform for all cloud workloads |
 | **k3s** | Lightweight Kubernetes distribution for resource-constrained edge nodes |
 | **Helm** | Package manager for deploying platform services as charts |
 | **Kustomize** | Manifest templating and environment-specific overlays |
