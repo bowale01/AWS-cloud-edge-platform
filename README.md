@@ -675,7 +675,16 @@ After the cluster is running and base K8s resources are applied, we install plat
 **What:** DaemonSet (runs on every node) that ships container logs to CloudWatch.
 **Remember:** Pods write to stdout → kubelet writes to disk → Fluent Bit reads and ships to CloudWatch with K8s metadata (pod name, namespace, labels). Lightweight at ~15MB RAM.
 
-### Step 21: ArgoCD (`kubernetes/platform/argocd/`)
+### Step 21: Karpenter (`kubernetes/platform/karpenter/`)
+**What:** Intelligent node autoscaler — provisions right-sized EC2 instances in ~30 seconds when pods can't be scheduled. Terminates empty nodes to save cost.
+**Key concepts:**
+- **NodePool** = defines constraints (which instance types, AZs, capacity type). Karpenter picks the cheapest fit.
+- **EC2NodeClass** = defines how instances are created (AMI, subnets, security groups, encryption).
+- **Consolidation** = if a node is underutilized, Karpenter moves pods off it and kills it.
+- **Coexistence** = Managed Node Group handles always-on platform services. Karpenter handles dynamic app workloads.
+- **Why not Cluster Autoscaler?** CA is slow (2-3 min), picks same instance type always. Karpenter is fast (30s), picks optimal type.
+
+### Step 22: ArgoCD (`kubernetes/platform/argocd/`)
 **What:** GitOps continuous delivery — syncs cluster state to match what's in Git.
 **Key concepts:**
 - **Pull-based** = ArgoCD PULLS from Git (doesn't need inbound access). Works behind firewalls (critical for edge).

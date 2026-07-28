@@ -1,0 +1,123 @@
+################################################################################
+# Karpenter NodePool — Defines What Nodes Karpenter Can Create
+#
+# WHAT THIS IS:
+# A NodePool tells Karpenter: "you're allowed to create nodes with these
+# constraints." It defines instance types, AZs, capacity type, and limits.
+#
+# NODEPOOL vs NODE GROUP:
+# - Node Group (AWS managed): fixed instance type, fixed scaling rules
+# - NodePool (Karpenter): flexible — Karpenter picks the best instance per pod
+#
+# STRATEGY:
+# We define two NodePools:
+# 1. General workloads (on-demand, various instance types)
+# 2. (Managed Node Group handles platform services — always running)
+################################################################################
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: rockauto-general
+spec:
+  # Template defines what the nodes look like
+  template:
+    metadata:
+      labels:
+        managed-by: karpenter
+        workload-type: application
+    spec:
+      # Which instance types Karpenter can choose from
+      # It will pick the cheapest one that fits the pending pod's requests
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["on-demand"]  # Production = on-demand only
+
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+            - t3.medium     # 2 vCPU, 4GB  — small workloads
+            - t3.large      # 2 vCPU, 8GB  — medium workloads
+            - m5.large      # 2 vCPU, 8GB  — general purpose
+            - m5.xlarge     # 4 vCPU, 16GB — larger workloads
+            - c5.large      # 2 vCPU, 4GB  — CPU-intensive
+            - c5.xlarge     # 4 vCPU, 8GB  — CPU-intensive larger
+
+        - key: topology.kubernetes.io/zone
+          operator: In
+          values:
+            - us-east-1a
+            - us-east-1b
+
+      # Node class reference (defines AMI, subnets, security groups)
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: rockauto-default
+
+  # Limits — cost ceiling. Karpenter won't exceed this.
+  limits:
+    cpu: "32"       # Max 32 vCPUs across all Karpenter nodes
+    memory: "64Gi"  # Max 64GB RAM across all Karpenter nodes
+
+  # Disruption — how Karpenter consolidates/replaces nodes
+  disruption:
+    # Consolidate underutilized nodes (move pods, terminate empty nodes)
+    consolidationPolicy: WhenEmptyOrUnderutilized
+
+    # Wait 30 seconds before disrupting (gives pods time to finish)
+    consolidateAfter: 30s
+
+    # Expire nodes after 24 hours (forces rotation for security patches)
+    expireAfter: 24h
+---
+################################################################################
+# EC2NodeClass — Defines HOW Karpenter Creates EC2 Instances
+#
+# This tells Karpenter:
+# - Which subnets to launch in (private subnets)
+# - Which security groups to attach
+# - Which AMI to use (EKS-optimized)
+# - Instance profile for IAM permissions
+################################################################################
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: rockauto-default
+spec:
+  # Use EKS-optimized AMI (Amazon Linux 2023)
+  amiSelectorTerms:
+    - alias: al2023@latest
+
+  # Launch in private subnets only (discovered by tag)
+  subnetSelectorTerms:
+    - tags:
+        kubernetes.io/role/internal-elb: "1"
+        Project: rockauto
+
+  # Attach the same security group as managed node group
+  securityGroupSelectorTerms:
+    - tags:
+        Project: rockauto
+        kubernetes.io/cluster/rockauto-eks-prod: owned
+
+  # IAM instance profile (same as managed node group)
+  instanceProfile: rockauto-karpenter-node-profile-prod
+
+  # Encrypt root volume
+  blockDeviceMappings:
+    - deviceName: /dev/xvda
+      ebs:
+        volumeSize: 50Gi
+        volumeType: gp3
+        encrypted: true
+
+  # Tags applied to all instances Karpenter creates
+  tags:
+    Project: rockauto
+    Environment: prod
+    ManagedBy: karpenter

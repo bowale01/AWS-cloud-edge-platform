@@ -1,0 +1,59 @@
+################################################################################
+# Karpenter — Intelligent Node Autoscaling
+#
+# WHAT IT DOES:
+# Watches for unschedulable pods (pending because no node has capacity),
+# then provisions the right-sized EC2 instance in ~30 seconds.
+# When nodes are underutilized, consolidates workloads and terminates
+# empty nodes to save cost.
+#
+# HOW IT'S DIFFERENT FROM CLUSTER AUTOSCALER:
+# - Cluster Autoscaler: "I need more nodes" → adds same instance type (slow, 2-3 min)
+# - Karpenter: "This pod needs 4GB RAM" → picks the cheapest instance that fits (fast, 30s)
+#
+# WHY KARPENTER?
+# - Faster: provisions in 30-60 seconds vs 2-3 minutes
+# - Smarter: picks optimal instance type per workload (c5 for CPU, r5 for memory)
+# - Cheaper: consolidates underutilized nodes automatically
+# - Simpler: no ASG configuration, no launch templates
+#
+# HOW IT WORKS:
+# 1. Pod is created but can't be scheduled (no capacity)
+# 2. Karpenter sees the pending pod
+# 3. Karpenter evaluates: what instance type fits this pod's requests?
+# 4. Karpenter launches the right EC2 instance (from allowed types)
+# 5. Pod gets scheduled on the new node
+# 6. Later: if node is <50% utilized, Karpenter moves pods and terminates it
+#
+# COEXISTENCE WITH MANAGED NODE GROUP:
+# We keep a small managed node group (2x t3.medium) for platform services
+# that must always be running (ArgoCD, Prometheus, Istio).
+# Karpenter handles dynamic application workloads that scale up/down.
+################################################################################
+
+## Service account with IRSA for EC2/pricing API access
+serviceAccount:
+  create: true
+  annotations:
+    eks.amazonaws.com/role-arn: "arn:aws:iam::ACCOUNT_ID:role/rockauto-karpenter-role-prod"
+
+## Controller settings
+controller:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+## Settings
+settings:
+  # Cluster name (Karpenter needs this to tag instances correctly)
+  clusterName: rockauto-eks-prod
+
+  # Cluster endpoint (for node bootstrap)
+  clusterEndpoint: "CLUSTER_ENDPOINT_PLACEHOLDER"
+
+  # Interruption queue (handles spot termination notices, rebalance events)
+  interruptionQueue: rockauto-karpenter-interruption-prod
