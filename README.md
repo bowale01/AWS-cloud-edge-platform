@@ -43,6 +43,7 @@ A production-grade cloud-native infrastructure platform supporting distributed e
 | **Cert-Manager** | Automated TLS certificate provisioning and renewal |
 | **External Secrets Operator** | Syncs secrets from AWS Secrets Manager into Kubernetes Secrets |
 | **AWS Load Balancer Controller** | Provisions ALBs automatically from Kubernetes Ingress resources |
+| **Karpenter** | Intelligent node autoscaler — provisions right-sized EC2 instances in ~30s, consolidates underutilized nodes |
 
 ### Security & Policy
 
@@ -225,6 +226,7 @@ graph TB
                 CM["Cert-Manager<br/>(TLS Certs)"]
                 ESO["External Secrets<br/>Operator"]
                 ALBC["AWS LB Controller"]
+                KARP["Karpenter<br/>(Node Autoscaler)"]
             end
         end
 
@@ -264,6 +266,7 @@ graph TB
     ARGO -->|"5. Deploy workloads"| NG
     ECR -->|"6. Image Pull (verified)"| NG
     KYV -->|"Admission Control<br/>(block non-compliant)"| NG
+    KARP -->|"Provisions new nodes<br/>when pods are pending"| NG
 
     %% ============ NETWORKING FLOW ============
     ALB -->|"Inbound HTTPS traffic"| ISTIO
@@ -305,7 +308,7 @@ graph TB
     classDef git fill:#24292E,stroke:#fff,color:#fff
 
     class ALB,NAT,VPC,PUB,PRIV,ECR,CW,SM,KMS,IAM,SG aws
-    class EKS,NG,ARGO,ISTIO,PROM,FB,KYV,CM,ESO,ALBC k8s
+    class EKS,NG,ARGO,ISTIO,PROM,FB,KYV,CM,ESO,ALBC,KARP k8s
     class K3S,EAGENT,MQTT,EPROM,EFB edge
     class GH,GHA git
 ```
@@ -355,6 +358,19 @@ graph TB
 │            → VPC Peering → Cloud services for aggregation              │
 │  ArgoCD (Cloud) → manages → ArgoCD Agent (Edge) → deploys on k3s      │
 │  Edge Prometheus → remote write → Cloud Prometheus (unified view)       │
+└─────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        AUTOSCALING FLOW (Karpenter)                      │
+│                                                                         │
+│  New pods created → no capacity on existing nodes → pod Pending         │
+│  → Karpenter detects pending pod → evaluates CPU/memory needs           │
+│  → selects cheapest instance type that fits → launches EC2 (~30s)       │
+│  → pod scheduled on new node                                            │
+│                                                                         │
+│  Traffic drops → pods scaled down by HPA → node underutilized           │
+│  → Karpenter consolidates pods onto fewer nodes → terminates empty node │
+│  → cost reduced automatically                                           │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -711,6 +727,7 @@ After the cluster is running and base K8s resources are applied, we install plat
 | **Fluent Bit** | Ships logs to CloudWatch | Automatic (DaemonSet) |
 | **ESO** | Syncs Secrets Manager → K8s | Automatic (watches ExternalSecret CRs) |
 | **AWS LB Controller** | Creates ALBs from Ingress | Automatic (watches Ingress) |
+| **Karpenter** | Scales nodes up/down based on pod demand | Automatic (watches pending pods) |
 
 ---
 
