@@ -1,4 +1,4 @@
-# RockAuto - Cloud and Edge Infrastructure Platform (AWS)
+#  Cloud and Edge Infrastructure Platform (AWS)
 
 A production-grade cloud-native infrastructure platform supporting distributed edge and centralized cloud workloads on AWS. Built with Kubernetes, GitOps, zero-trust security, and Infrastructure as Code.
 
